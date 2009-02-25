@@ -122,7 +122,8 @@ function _storage_s3_request($access_key_id, $secret_access_key, $method,
 
 
 function _storage_s3_url($container, $s3_object) {
-
+  $query = array();
+  
   $path = 'http://' . $container['settings']['bucket'] . '.s3.amazonaws.com/' . $s3_object;
 
   if($container['serving'] == _STORAGE_API_ACCESS_CONTROL) {
