@@ -903,7 +903,7 @@ function _storage_api_delete_object($object_id) {
 
 function _storage_api_acquire_from_source_url(&$file) {
 
-  if($_SERVER['REQUEST_TIME'] < $data['next_acquire_time'])
+  if($_SERVER['REQUEST_TIME'] < $file['data']['next_acquire_time'])
     return;
     
   $filepath = _storage_api_acquire_from_url($file['source_url']);
@@ -934,10 +934,13 @@ function _storage_api_acquire_from_source_url(&$file) {
         WHERE file_id = %d
       ",
         $file['object_id'],
-        $file['obtained'],
+        $_SERVER['REQUEST_TIME'],
         serialize($file['data']),
         $file['file_id']
       );
+
+      // we need to reload $file to get the filesize, etc
+      $file = storage_api_file_load($file['file_id']);
 
       $message = t('Acquired file from url: ') . $file['source_url'] . ' . <br />';
       $message .= _storage_api_file_log_info($file);
@@ -952,8 +955,8 @@ function _storage_api_acquire_from_source_url(&$file) {
   
   if($filepath === FALSE) {   // hard failure
 
-    unset($data['next_acquire_time']);
-    unset($data['next_acquire_delay']);
+    unset($file['data']['next_acquire_time']);
+    unset($file['data']['next_acquire_delay']);
 
     db_query("
       UPDATE {storage_files}
@@ -961,7 +964,7 @@ function _storage_api_acquire_from_source_url(&$file) {
         data = '%s'
       WHERE file_id = %d
     ",
-      serialize($data),
+      serialize($file['data']),
       $file['file_id']
     );
     
@@ -980,14 +983,14 @@ function _storage_api_acquire_from_source_url(&$file) {
   
   // soft failure
   
-  if($data['next_acquire_time']) {
+  if($file['data']['next_acquire_time']) {
   
-    $data['next_acquire_time'] += $data['next_acquire_delay'];
-    $data['next_acquire_delay'] *= 2;
+    $file['data']['next_acquire_time'] += $file['data']['next_acquire_delay'];
+    $file['data']['next_acquire_delay'] *= 2;
   }
   else {
-    $data['next_acquire_time'] = $_SERVER['REQUEST_TIME'] + 60;
-    $data['next_acquire_delay'] = 120;
+    $file['data']['next_acquire_time'] = $_SERVER['REQUEST_TIME'] + 60;
+    $file['data']['next_acquire_delay'] = 120;
   }
   
   db_query("
@@ -995,7 +998,7 @@ function _storage_api_acquire_from_source_url(&$file) {
     SET data = '%s'
     WHERE file_id = %d
   ",
-    serialize($data),
+    serialize($file['data']),
     $file['file_id']
   );
 }
