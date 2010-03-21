@@ -107,6 +107,8 @@ function _storage_s3_request($container, $method, $bucket = NULL, $object_name =
       break;
   }
   
+  $object_name = rawurlencode($object_name);
+  
   if($bucket)
     $object_name = '/' . $object_name;
   
