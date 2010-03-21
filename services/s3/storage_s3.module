@@ -939,15 +939,27 @@ function storage_s3_storage_object_instance_serve_rtmp($container, $file) {
 }
 
 
+function _storage_s3_file_reference($container, $file) {
+
+  if($container['reference'])
+    $reference =  $container['reference'];
+  else
+    $reference =  'file-' . $file['file_id'];
+    
+  return $reference;
+}
+
+
 /**
  * Implement hook_storage_file_instance_create() .
  */
 function storage_s3_storage_file_instance_create($container, $file) {
+
+  $reference = 'file-' . $file['file_id'] . '/' . $file['filename'];
   
-  $result = _storage_s3_request($container, 'PUT', $container['settings']['bucket'], 
-    'file-' . $file['file_id'], $file);
+  $result = _storage_s3_request($container, 'PUT', $container['settings']['bucket'], $reference, $file);
   
-  return $result['http_code'] == 200;
+  return ($result['http_code'] == 200) ? $reference : FALSE;
 }
 
 
@@ -955,16 +967,18 @@ function storage_s3_storage_file_instance_create($container, $file) {
  * Implement hook_storage_file_instance_copy() .
  */
 function storage_s3_storage_file_instance_copy($container, $file, $source_container) {
+
+  $reference = 'file-' . $file['file_id'] . '/' . $file['filename'];
+
+  $source['copy_source'] = '/' . $source_container['settings']['bucket'] . 
+    '/file-' . $file['file_id'] . '/' . $file['filename'];
   
-  $source['copy_source'] = '/' . $source_container['settings']['bucket'] . '/file-' . $file['file_id'];
-  
-  $result = _storage_s3_request($container, 'PUT', $container['settings']['bucket'], 
-    'file-' . $file['file_id'], $source);
+  $result = _storage_s3_request($container, 'PUT', $container['settings']['bucket'], $reference, $source);
   
   if($result['http_code'] == 200 && $result['simplexml']) {
 
     if($result['simplexml']->getName() == 'CopyObjectResult')
-      return TRUE;
+      return $reference;
   }
   
   return FALSE;
@@ -976,8 +990,9 @@ function storage_s3_storage_file_instance_copy($container, $file, $source_contai
  */
 function storage_s3_storage_file_instance_destroy($container, $file) {
   
-  $result = _storage_s3_request($container, 'DELETE', $container['settings']['bucket'], 
-    'file-' . $file['file_id']);
+  $reference = _storage_s3_file_reference($container, $file);
+
+  $result = _storage_s3_request($container, 'DELETE', $container['settings']['bucket'], $reference);
   
   return $result['http_code'] == 204;
 }
@@ -988,8 +1003,9 @@ function storage_s3_storage_file_instance_destroy($container, $file) {
  */
 function storage_s3_storage_file_instance_get_filepath($container, $file) {
   
-  $result = _storage_s3_request($container, 'GET', $container['settings']['bucket'], 
-    'file-' . $file['file_id']);
+  $reference = _storage_s3_file_reference($container, $file);
+
+  $result = _storage_s3_request($container, 'GET', $container['settings']['bucket'], $reference);
 
   return $result['filepath'];
 }
@@ -1000,7 +1016,9 @@ function storage_s3_storage_file_instance_get_filepath($container, $file) {
  */
 function storage_s3_storage_file_instance_serve($container, $file) {
 
-  return _storage_s3_url($container, 'file-' . $file['file_id']);
+  $reference = _storage_s3_file_reference($container, $file);
+
+  return _storage_s3_url($container, $reference);
 }
 
 
@@ -1009,6 +1027,8 @@ function storage_s3_storage_file_instance_serve($container, $file) {
  */
 function storage_s3_storage_file_instance_serve_rtmp($container, $file) {
 
-  return _storage_s3_rtmp($container, 'file-' . $file['file_id']);
+  $reference = _storage_s3_file_reference($container, $file);
+
+  return _storage_s3_rtmp($container, $reference);
 }
 

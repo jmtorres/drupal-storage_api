@@ -210,7 +210,7 @@ function _storage_api_mime_extension_mapping() {
     'xpi' => 'application/x-xpinstall',
     'au|snd' => 'audio/basic',
     'mid|midi|kar' => 'audio/midi',
-    'mpga|mpega|mp2|mp3|m4a' => 'audio/mpeg',
+    'mp3|mpga|mpega|mp2|m4a' => 'audio/mpeg',
     'm3u' => 'audio/x-mpegurl',
     'oga|spx' => 'audio/ogg',
     'sid' => 'audio/prs.sid',
