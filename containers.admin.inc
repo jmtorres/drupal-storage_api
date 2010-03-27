@@ -1,7 +1,17 @@
 <?php
 // $Id$
 
-// Copyright 2008-2009 Jonathan Brown
+// Copyright 2008-2010 Jonathan Brown
+
+
+function storage_containers_capabilities() {
+
+  return array(
+    STORAGE_API_STORAGE_ONLY => t('Storage only'),
+    STORAGE_API_SERVING => t('Serving'),
+    STORAGE_API_ACCESS_CONTROL => t('Serving with access control'),
+  );
+}
 
 
 function _storage_api_containers_query() {
@@ -45,7 +55,7 @@ function storage_api_containers() {
 
   drupal_set_title(t('Storage containers'));
 
-  $header = array(t('Container'), t('Service'), t('Serving'), t('Suspended'), t('Instances'), t('Size'));
+  $header = array(t('Container'), t('Service'), t('Capability'), t('Suspended'), t('Instances'), t('Size'));
 
   $query = _storage_api_containers_query();
   $result = db_query($query . "ORDER BY name, container_id");
@@ -55,7 +65,10 @@ function storage_api_containers() {
   
     $row[] = _storage_api_container_link($container);
     $row[] = _storage_api_get_service_name($container['service_id'], TRUE);
-    $row[] = $container['serving'] ? 'Yes' : 'No';
+
+    $capabilities = storage_containers_capabilities();
+    $row[] = $capabilities[$container['serving']];
+
     $row[] = $container['suspended'] ? 'Yes' : 'No';
     $row[] = $container['objects_count'] + $container['files_count'];
     $row[] = storage_api_format_size($container['objects_size'] + $container['files_size']);
@@ -133,15 +146,10 @@ function storage_api_create_container_form($form_state) {
       );
       
       $form['serving'] = array(
-        '#type' => 'checkbox',
-        '#title' => t('Serving'),
-        '#default_value' => $form_state['storage']['serving']
-      );
-      
-      $form['access_control'] = array(
-        '#type' => 'checkbox',
-        '#title' => t('Enforce access control'),
-        '#default_value' => $form_state['storage']['access_control']
+        '#type' => 'radios',
+        '#title' => t('Capability'),
+        '#options' => storage_containers_capabilities(),
+        '#default_value' => isset($form_state['storage']['serving']) ? $form_state['storage']['serving'] : STORAGE_API_SERVING,
       );
 
       $form['next'] = array(
@@ -156,25 +164,12 @@ function storage_api_create_container_form($form_state) {
     
       $service_name = _storage_api_get_service_name($form_state['storage']['service_id']);
     
-      switch($form_state['storage']['serving']) {
-
-        case STORAGE_API_STORAGE_ONLY:
-          $serving = t('No');
-          break;
-
-        case STORAGE_API_SERVING:
-          $serving = t('Yes');
-          break;
-
-        case STORAGE_API_ACCESS_CONTROL:
-          $serving = t('Securely');
-          break;
-      }
+      $capabilities = storage_containers_capabilities();
 
       $info = array(
         t('Name') => $form_state['storage']['name'],
         t('Service') => $service_name,
-        t('Serving') => $serving,
+        t('Capability') => $capabilities[$form_state['storage']['serving']],
       );
       
       $form['info'] = array(
@@ -219,9 +214,6 @@ function storage_api_create_container_form_validate($form, &$form_state) {
   
     case 1:
 
-      if($form_state['values']['serving'] && $form_state['values']['access_control'])
-        $form_state['values']['serving'] = STORAGE_API_ACCESS_CONTROL;
-    
       $form_state['storage'] = array(
         'name' => $form_state['values']['name'],
         'service_id' => $form_state['values']['service_id'],
@@ -293,27 +285,14 @@ function storage_api_container_form($form_state, $container) {
 
   drupal_set_title(t('Storage container: ') . $container['name']);
 
-  switch($container['serving']) {
-  
-    case STORAGE_API_STORAGE_ONLY:
-      $serving = t('No');
-      break;
-
-    case STORAGE_API_SERVING:
-      $serving = t('Yes');
-      break;
-
-    case STORAGE_API_ACCESS_CONTROL:
-      $serving = t('Securely');
-      break;
-  }
+  $capabilities = storage_containers_capabilities();
   
   $query = _storage_api_containers_query();
   $container_info = db_fetch_array(db_query($query . "WHERE {storage_container}.container_id = %d", 
     $container['container_id']));
 
   $info[t('Service')] = _storage_api_get_service_name($container['service_id'], TRUE);
-  $info[t('Serving')] = $serving;
+  $info[t('Capability')] = $capabilities[$container['serving']];
   $info[t('Suspended')] = $container['suspended'] ? t('Yes') : t('No');
   $info[t('Instances')] = $container_info['objects_count'] + $container_info['files_count'];
   $info[t('Size')] = storage_api_format_size($container_info['objects_size'] + $container_info['files_size']);
