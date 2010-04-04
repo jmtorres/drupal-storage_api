@@ -1885,7 +1885,8 @@ function storage_api_class_add_container($class, $container) {
   db_query("
     INSERT IGNORE INTO {storage_class_container}
     SET class_id = %d,
-      container_id = %d
+      container_id = %d,
+      serving = 1
   ",
     $class['class_id'],
     $container['container_id']
