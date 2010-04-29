@@ -408,51 +408,6 @@ function storage_api_class_load($class_id) {
 }
 
 
-function _storage_api_update_services() {
-
-  $modules = module_implements('storage_service_info');
-
-  $code_service_ids = array();
-
-  foreach($modules as $module)
-    $code_service_ids[] = substr($module, 8);
-
-
-  $result = db_query("
-    SELECT service_id
-    FROM {storage_service}
-  ");
-  
-  $db_service_ids = array();
-
-  while($service = db_fetch_array($result)) {
-
-    if(!in_array($service['service_id'], $code_service_ids)) {
-
-      db_query("
-        DELETE FROM {storage_service}
-        WHERE service_id = '%s'
-      ",
-        $service['service_id']
-      );
-    }
-    else {
-      $db_service_ids[] = $service['service_id'];
-    }
-  }
-  
-  
-  foreach($code_service_ids as $service_id) {
-  
-    if(!in_array($service_id, $db_service_ids)) {
-    
-      $service = array('service_id' => $service_id);
-      drupal_write_record('storage_service', $service);
-    }
-  }
-}  
-
-
 function _storage_api_service_invoke() {
   $args = func_get_args();
   
@@ -616,7 +571,7 @@ function _storage_api_service_unavailable() {
 
 function _storage_api_initial_container_instance($file) {
 
-  $container = _storage_api_get_initial_container($file['selector_id']);
+  $container = storage_container_load($file['data']['initial_container_id']);
   
   $instance = db_fetch_array(db_query("
     (
@@ -645,9 +600,7 @@ function _storage_api_initial_container_instance($file) {
   if(!$instance)
     return FALSE;
     
-  $container += $instance;
-
-  return $container;
+  return $container + $instance;
 }
 
 
@@ -769,7 +722,7 @@ function _storage_api_container_flush_serving_container($container_id) {
 
 function _storage_api_file_generate(&$file) {
 
-  $container = _storage_api_get_initial_container($file['selector_id']);
+  $container = _storage_api_get_selector_initial_container($file['selector_id']);
   
   if(!$container)
     return FALSE;
@@ -794,6 +747,9 @@ function _storage_api_file_generate(&$file) {
     return FALSE;
   }
   
+  $file['data']['initial_container_id'] = $container['container_id'];
+  drupal_write_record('storage_file', $file, 'file_id');
+
   $message = 'Generated file' . ($file['filename'] ? (' ' . $file['filename']) : '');
   $message .= '<br />' . _storage_api_file_log_info($file);
   watchdog('storage_api', $message, NULL, WATCHDOG_NOTICE, $link);
@@ -1158,7 +1114,7 @@ function storage_api_selector_delete($selector_id) {
 }
 
 
-function _storage_api_get_initial_container($selector_id) {
+function _storage_api_get_selector_initial_container($selector_id) {
 
   $class_id = db_fetch_array(db_query("
     SELECT class_id
@@ -1396,11 +1352,12 @@ function storage_api_file_add($selector_id, $options = array()) {
     $options['obtained'] = $_SERVER['REQUEST_TIME'];
 
   if($options['filepath']) {
-    $container = _storage_api_get_initial_container($selector_id);
+    $container = _storage_api_get_selector_initial_container($selector_id);
     
     if(!$container)
       return FALSE;
 
+    $options['data']['initial_container_id'] = $container['container_id'];
     $options['object_id'] = _storage_api_get_object_id($options['filepath'], $new_object);
   }
 
@@ -2051,6 +2008,55 @@ function theme_storage_api_info_table($info) {
 }
 
 
+function _storage_api_update_services() {
+
+  $modules = module_implements('storage_service_info');
+
+  $code_service_ids = array();
+
+  foreach($modules as $module)
+    $code_service_ids[] = substr($module, 8);
+
+
+  $result = db_query("
+    SELECT service_id
+    FROM {storage_service}
+  ");
+  
+  $db_service_ids = array();
+
+  while($service = db_fetch_array($result)) {
+
+    if(!in_array($service['service_id'], $code_service_ids)) {
+
+      db_query("
+        DELETE FROM {storage_service}
+        WHERE service_id = '%s'
+      ",
+        $service['service_id']
+      );
+    }
+    else {
+      $db_service_ids[] = $service['service_id'];
+    }
+  }
+  
+  
+  foreach($code_service_ids as $service_id) {
+  
+    if(!in_array($service_id, $db_service_ids)) {
+    
+      db_query("
+        INSERT INTO {storage_service}
+        SET service_id = '%s'
+      ",
+        $service_id
+      );
+    }
+  }
+}  
+
+
 /**
  * Implement hook_form_alter() .
  */
@@ -2071,8 +2077,7 @@ function storage_api_form_alter(&$form, $form_state, $form_id) {
  */
 function storage_api_enable() {
 
-  // in case the service modules are enabled simultaneously as the form_alter above wont have taken affect
-
+  // in case the service modules are enabled simultaneously as the form_alter above may not have taken affect
   _storage_api_update_services();
 }
 
