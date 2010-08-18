@@ -571,7 +571,7 @@ function _storage_api_service_unavailable() {
 
 function _storage_api_initial_container_instance($file) {
 
-  $container = storage_container_load($file['data']['initial_container_id']);
+  $container = storage_api_container_load($file['data']['initial_container_id']);
   
   $instance = db_fetch_array(db_query("
     (
