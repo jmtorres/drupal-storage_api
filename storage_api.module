@@ -1131,7 +1131,45 @@ function _storage_api_get_selector_initial_container($selector_id) {
 }
 
 
-function _storage_api_get_object_id($filepath, &$new_object = NULL) {
+function storage_api_mime_detect($filepath, $filename) {
+  $mime = FALSE;
+
+  if (is_null($filename)) {
+    $filename = basename($filepath);
+  }
+
+  if (extension_loaded('fileinfo')) {
+    static $finfo;
+
+    if (!isset($finfo)) {
+      $finfo = @finfo_open(FILEINFO_MIME);
+    }
+
+    if ($finfo !== FALSE) {
+      $mime = finfo_file($finfo, $filepath);
+    }
+  }
+
+  if ($mime == '' || (strtok($mime, ';') == 'application/octet-stream')) {
+    // On OSX the -i switch is -I, so if we use the long flags everyone is
+    // happy.
+    $command = 'file --brief --mime ' . escapeshellarg($filepath);
+    $mime = trim(exec($command, $output, $result));
+
+    if ($result !== 0) {
+      $mime = FALSE;
+    }
+  }
+
+  if ($mime == '' || (strtok($mime, ';') == 'application/octet-stream')) {
+    $mime = file_get_mimetype($filename);
+  }
+
+  return ($mime == '') ? 'application/octet-stream; charset=binary' : $mime;
+}
+
+
+function _storage_api_get_object_id($filepath, $filename, &$new_object = NULL) {
 
   $fileinfo = @stat($filepath);
   
@@ -1169,7 +1207,7 @@ function _storage_api_get_object_id($filepath, &$new_object = NULL) {
       $fileinfo['size'],
       $md5,
       $whirlpool,
-      mimedetect_mime(array('filepath' => $filepath))
+      storage_api_mime_detect($filepath, $filename)
     );
     
     $object_id = db_last_insert_id('storage_object', 'object_id');
@@ -1347,30 +1385,32 @@ function storage_api_inherit_servings($new_file_id, $old_file_id) {
  */
 function storage_api_file_add($selector_id, $options = array()) {
   $options['selector_id'] = $selector_id;
-  
-  if(!$options['obtained'])
+
+  if (!isset($options['obtained']))
     $options['obtained'] = $_SERVER['REQUEST_TIME'];
 
-  if($options['filepath']) {
-    $container = _storage_api_get_selector_initial_container($selector_id);
-    
-    if(!$container)
-      return FALSE;
+  if ($options['get_filename']) {
 
-    $options['data']['initial_container_id'] = $container['container_id'];
-    $options['object_id'] = _storage_api_get_object_id($options['filepath'], $new_object);
-  }
-
-  if($options['get_filename']) {
-
-    if($options['filepath']) {
+    if (isset($options['filepath'])) {
       $options['filename'] = basename($options['filepath']);
     }
-    else if($options['source_url']) {
+    else if (isset($options['source_url'])) {
       $options['filename'] = basename(parse_url($options['source_url'], PHP_URL_PATH));
     }
   }
-  
+
+  if (isset($options['filepath'])) {
+    $container = _storage_api_get_selector_initial_container($selector_id);
+    
+    if(!$container) {
+      return FALSE;
+    }
+
+    $options['data']['initial_container_id'] = $container['container_id'];
+    $options['object_id'] = _storage_api_get_object_id($options['filepath'], 
+      isset($options['filename']) ? $options['filename'] : NULL, $new_object);
+  }
+
   $options['check_me'] = TRUE;
   drupal_write_record('storage_file', $options);
   $file = storage_api_file_load($options['file_id']);
@@ -1508,7 +1548,8 @@ function _storage_api_acquire_from_source_url(&$file) {
   $filepath = _storage_api_acquire_from_url($file['source_url']);
   
   if($filepath) {
-    $object_id = _storage_api_get_object_id($filepath, $new_object);
+    $object_id = _storage_api_get_object_id($filepath, isset($file['filename']) ? $file['filename'] : 
+      basename(parse_url($file['source_url'], PHP_URL_PATH)), $new_object);
 
     if(!$file['object_id']) {
       $file['object_id'] = $object_id;
@@ -1693,7 +1734,7 @@ function storage_api_get_local_filepath(&$file, &$keep_me) {
 
     $filepath = module_invoke($file['module'], 'storage_file_generate', $file);
     
-    $object_id = _storage_api_get_object_id($filepath, $new_object);
+    $object_id = _storage_api_get_object_id($filepath, NULL, $new_object);
     
     if(!$object_id) {
       @unlink($filepath);
