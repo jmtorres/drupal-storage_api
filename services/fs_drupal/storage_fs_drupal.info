@@ -1,4 +1,3 @@
-; $Id$
 name = Filesystem / Drupal
 description = "Filesystem storage service serving via Drupal."
 package = Storage
