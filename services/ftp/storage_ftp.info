@@ -1,4 +1,3 @@
-; $Id$
 name = FTP
 description = "FTP storage service serving via any HTTP or FTP service."
 package = Storage

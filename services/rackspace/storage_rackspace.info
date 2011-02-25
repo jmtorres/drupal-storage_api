@@ -1,4 +1,3 @@
-; $Id$
 name = Rackspace Cloud Files
 description = "Rackspace Cloud Files storage service."
 package = Storage
