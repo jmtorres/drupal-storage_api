@@ -28,7 +28,7 @@ class StorageRackspace extends StorageContainer implements StorageContainerInter
     }
 
     // Use the UK host if necessary.
-    $auth_host = ($this->settings['locality'] == 'us') ? US_AUTHURL : UK_AUTHURL;
+    $auth_host = ($this->settings['locality'] == 'us') ? CF_US_AUTHURL : CF_UK_AUTHURL;
     $auth = new CF_Authentication($this->settings['username'], $this->settings['api_key'], NULL, $auth_host);
     $auth->ssl_use_cabundle();
 
