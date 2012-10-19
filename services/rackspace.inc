@@ -81,6 +81,7 @@ class StorageRackspace extends StorageContainer implements StorageContainerInter
       'username' => '',
       'cf_container' => '',
       'base_url' => '',
+      'base_url_https' => '',
     );
   }
 
@@ -142,6 +143,13 @@ class StorageRackspace extends StorageContainer implements StorageContainerInter
         '#title' => t("Base URL"),
         '#description' => $description,
         '#default_value' => $this->settings['base_url'],
+      );
+
+      $items['base_url_https'] = array(
+        '#type' => 'textfield',
+        '#title' => t("Base URL (https)"),
+        '#description' => $description,
+        '#default_value' => $this->settings['base_url_https'],
       );
     }
 
@@ -348,5 +356,10 @@ class StorageRackspace extends StorageContainer implements StorageContainerInter
     }
 
     return $temp_uri;
+  }
+
+  public function serviceInstanceServe($reference, $https) {
+    $base_url = (!$https ? $this->settings['base_url'] : $this->settings['base_url_https'];
+    return $base_url . '/' . $reference;
   }
 }
