@@ -359,7 +359,7 @@ class StorageRackspace extends StorageContainer implements StorageContainerInter
   }
 
   public function serviceInstanceServe($reference, $https) {
-    $base_url = (!$https ? $this->settings['base_url'] : $this->settings['base_url_https'];
+    $base_url = (!$https ? $this->settings['base_url'] : $this->settings['base_url_https']);
     return $base_url . '/' . $reference;
   }
 }
