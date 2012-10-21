@@ -224,18 +224,29 @@ class StorageRackspace extends StorageContainer implements StorageContainerInter
 
   public function servicePostCreate() {
     // Get the base URL from Rackspace if necessary.
-    if (!$this->access_control && !$this->settings['base_url']) {
+    if (!$this->access_control) {
       // Store base_url. This happens in this method so it will be stored for
       // containers that already exist at creation time.
-      $this->settings['base_url'] = $this->cf_container()->cdn_uri;
+      if(!$this->settings['base_url']){
+        $this->settings['base_url'] = $this->cf_container()->cdn_uri;
+      }
+      if(!$this->settings['base_url_https']){
+        $this->settings['base_url_https'] = $this->cf_container()->cdn_ssl_uri;
+      }
+
       return TRUE;
     }
   }
 
   public function serviceUpdate() {
     // Get the base URL from Rackspace if necessary.
-    if (!$this->access_control && !$this->settings['base_url']) {
-      $this->settings['base_url'] = $this->cf_container()->cdn_uri;
+    if (!$this->access_control) {
+      if(!$this->settings['base_url']){
+        $this->settings['base_url'] = $this->cf_container()->cdn_uri;
+      }
+      if(!$this->settings['base_url_https']){
+        $this->settings['base_url_https'] = $this->cf_container()->cdn_ssl_uri;
+      }
     }
   }
 
