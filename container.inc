@@ -1,6 +1,12 @@
 <?php
 
+/**
+ * @file
+ * Container class file for Storage API.
+ */
+
 abstract class StorageContainer {
+
   public $container_id;
   public $service_id;
   public $name;
@@ -23,13 +29,13 @@ abstract class StorageContainer {
   }
 
   public function count() {
-  
+
     return db_select('storage_instance')
-      ->condition('container_id', $this->container_id)
-      ->isNotNull('file_id')
-      ->countQuery()
-      ->execute()
-      ->fetchField();
+        ->condition('container_id', $this->container_id)
+        ->isNotNull('file_id')
+        ->countQuery()
+        ->execute()
+        ->fetchField();
   }
 
   public function size($format = FALSE) {
@@ -39,9 +45,9 @@ abstract class StorageContainer {
     $query->addExpression('SUM(storage_file.size)', 'size');
 
     $size = (int) $query->condition('container_id', $this->container_id)
-      ->execute()
-      ->fetchField();
-      
+        ->execute()
+        ->fetchField();
+
     return $format ? storage_format_byte_count($size) : $size;
   }
 
@@ -62,32 +68,34 @@ abstract class StorageContainer {
     }
   }
 
-  private function htaccessCreate() {
+  public function htaccessCreate() {
 
-    $lines = array(
-      'SetHandler Drupal_Security_Do_Not_Remove_See_SA_2006_006',
-      'Options None',
-      'Options +FollowSymLinks',
-    );
-    
-    if ($this->access_control) {
-      $lines[] = 'Deny from all';
+    if (!function_exists('file_htaccess_lines')) {
+      $msg = "Unable to create .htaccess file before updating to latest Drupal Core";
+      watchdog('storage', $msg, array(), WATCHDOG_ERROR);
+      throw new StorageException(t($msg));
     }
-    else {
-      $lines[] = '<IfModule mod_headers.c>';
-      $lines[] = '  Header set Content-Disposition "attachment"';
-      $lines[] = '</IfModule>';
+    $lines = file_htaccess_lines($this->access_control);
+    if (!$this->access_control) {
+      $lines .= <<<EOF
+
+<IfModule mod_headers.c>
+  Header set Content-Disposition "attachment"
+</IfModule>
+EOF;
     }
 
     $temp_uri = new StorageTempURI();
-    file_put_contents($temp_uri, implode("\n", $lines) . "\n");
+    file_put_contents($temp_uri, $lines);
 
     $storage = new Storage(array('filename' => '.htaccess'));
 
     try {
       $this->serviceInstanceCreate($storage, $temp_uri);
     }
-    catch (StorageException $e) {};
+    catch (StorageException $e) {
+      
+    };
   }
 
   /**
@@ -97,7 +105,7 @@ abstract class StorageContainer {
    *   When it wasn't possible to create the container.
    */
   public function create($already_exists = FALSE) {
-  
+
     if (!$already_exists) {
       try {
         $this->serviceCreate();
@@ -108,35 +116,34 @@ abstract class StorageContainer {
         throw new StorageException(t($msg, array('@container' => $this->name())));
       }
     }
-    
+
     drupal_write_record('storage_container', $this);
 
     if ($this->servicePostCreate()) {
       $this->update();
     }
-    
+
     if ($this->service()->htaccess) {
       $this->htaccessCreate();
     }
 
     $msg = 'Storage container !container has been created.';
     drupal_set_message(t($msg, array('!container' => $this->link())));
-    watchdog('storage', $msg, array('!container' => check_plain($this->name())), WATCHDOG_NOTICE, 
-      l(t('view'), $this->path()));
+    watchdog('storage', $msg, array('!container' => check_plain($this->name())), WATCHDOG_NOTICE, l(t('view'), $this->path()));
   }
 
   public function name() {
     return $this->service()->name . ($this->name ? (' - ' . $this->name) : '');
   }
-  
+
   public function path() {
     return 'admin/structure/storage/container/' . $this->container_id;
   }
-  
+
   public function link() {
     return l($this->name(), $this->path());
   }
-  
+
   public function update() {
     drupal_write_record('storage_container', $this, 'container_id');
   }
@@ -145,10 +152,10 @@ abstract class StorageContainer {
 
     $selector_subquery = db_select('storage_class_container');
     $selector_subquery->join('storage_selector', NULL, 'storage_class_container.class_id = storage_selector.class_id');
-      
+
     $selector_subquery->fields('storage_selector', array('selector_id'))
       ->condition('storage_class_container.container_id', $this->container_id);
-      
+
     db_update('storage')
       ->expression('serving_container', 'NULL')
       ->condition('selector_id', $selector_subquery, 'IN')
@@ -156,7 +163,6 @@ abstract class StorageContainer {
 
     cache_clear_all();
   }
-
 
   public function instanceCreate(Storage $storage, $uri) {
 
@@ -173,9 +179,9 @@ abstract class StorageContainer {
     );
 
     drupal_write_record('storage_instance', $instance);
-    
+
     $storage->flushServingContainer();
-    
+
     $message = 'File instance created: ' . $storage->filename . '<br />';
     $message .= $this->logInfo();
     $message .= $storage->logInfo();
@@ -184,7 +190,6 @@ abstract class StorageContainer {
 
     return $reference;
   }
-
 
   public function instanceCopy(Storage $storage, StorageContainerInterface $source_container) {
 
@@ -201,16 +206,15 @@ abstract class StorageContainer {
     );
 
     drupal_write_record('storage_instance', $instance);
-    
+
     $storage->flushServingContainer();
-    
+
     $message = 'File instance copied: ' . $storage->filename . '<br />';
     $message .= $this->logInfo();
     $message .= $storage->logInfo();
 
     watchdog('storage', $message, NULL);
   }
-
 
   public function tryInstanceCopy(Storage $storage) {
 
@@ -269,7 +273,7 @@ abstract class StorageContainer {
       // We don't have a file_id yet, so we might check for an instance once we do.
       $check = TRUE;
     }
-    
+
     // Is it possible to short circuit?
     if ($this->service()->copy && !$check) {
       if ($this->tryInstanceCopy($storage)) {
@@ -284,23 +288,21 @@ abstract class StorageContainer {
     if ($check && !$storage->new_file) {
       $exists = $this->instanceExists($storage);
     }
-    
+
     if (!$exists) {
       $this->instanceCreate($storage, $uri);
     }
   }
 
-
   public function instanceExists(Storage $storage) {
 
     return db_select('storage_instance')
-      ->fields('storage_instance', array('reference'))
-      ->condition('file_id', $storage->file_id)
-      ->condition('container_id', $this->container_id)
-      ->execute()
-      ->fetchField();
+        ->fields('storage_instance', array('reference'))
+        ->condition('file_id', $storage->file_id)
+        ->condition('container_id', $this->container_id)
+        ->execute()
+        ->fetchField();
   }
-
 
   /**
    * Destroy an instance if it isn't required by any other storages.
@@ -358,7 +360,6 @@ abstract class StorageContainer {
     $this->instanceDestroy($storage, $reference);
   }
 
-
   /**
    * Destroy an instance in the container
    *
@@ -385,14 +386,13 @@ abstract class StorageContainer {
       ->condition('file_id', $storage->file_id)
       ->condition('container_id', $this->container_id)
       ->execute();
-    
+
     $message = 'File instance destroyed: ' . $storage->filename . '<br />';
     $message .= $this->logInfo();
     $message .= $storage->logInfo();
 
     watchdog('storage', $message, NULL);
   }
-
 
   public function instanceLink($reference) {
 
@@ -403,7 +403,6 @@ abstract class StorageContainer {
       return $reference;
     }
   }
-
 
   public function classes() {
     $classes = array();
@@ -420,7 +419,7 @@ abstract class StorageContainer {
 
     return $classes;
   }
-  
+
   /**
    * Delete container.
    */
@@ -476,16 +475,16 @@ abstract class StorageContainer {
   public function referenceExists($reference) {
 
     $exists = (bool) db_select('storage_instance')
-      ->condition('container_id', $this->container_id)
-      ->condition('reference', $reference)
-      ->countQuery()
-      ->execute()
-      ->fetchField();
-      
+        ->condition('container_id', $this->container_id)
+        ->condition('reference', $reference)
+        ->countQuery()
+        ->execute()
+        ->fetchField();
+
     if ($exists) {
       return TRUE;
     }
-    
+
     return $this->serviceInstanceExists($reference);
   }
 
@@ -502,7 +501,7 @@ abstract class StorageContainer {
     if ($this->referenceExists($filename)) {
 
       $pos = strrpos($filename, '.');
-      
+
       if ($pos !== FALSE) {
         $name = substr($filename, 0, $pos);
         $ext = substr($filename, $pos);
@@ -513,11 +512,11 @@ abstract class StorageContainer {
       }
 
       $count = 0;
-      
+
       do {
         $filename = $name . '_' . $count++ . $ext;
-        
-      } while ($this->referenceExists($filename));
+      }
+      while ($this->referenceExists($filename));
     }
 
     return $filename;
@@ -530,22 +529,20 @@ abstract class StorageContainer {
     return $info;
   }
 
-
   /**
    * Default implementations.
    */
-
   public function serviceManifest(array &$sandbox, &$finished) {
-  
+
     if (!isset($sandbox['references'])) {
       $sandbox['references'] = $this->serviceListReferences();
     }
 
     $count = 100;
     $manifest = array();
-    
+
     while ($count-- && ($reference = array_shift($sandbox['references']))) {
-    
+
       try {
         $info = $this->serviceInstanceCheck($reference);
       }
@@ -555,7 +552,7 @@ abstract class StorageContainer {
 
       $manifest[$reference] = $info;
     }
-    
+
     $finished = (count($sandbox['references']) == 0);
 
     return $manifest;
@@ -623,68 +620,122 @@ abstract class StorageContainer {
     readfile($uri);
   }
 
-
   /**
    * Optional implementations.
    */
-
   public function serviceSettingsDefault() {
     return array();
   }
-  public function servicePostCreate() {}
-  public function serviceUpdate() {}
-  public function serviceMaintenance() {}
+
+  public function servicePostCreate() {
+    
+  }
+
+  public function serviceUpdate() {
+    
+  }
+
+  public function serviceMaintenance() {
+    
+  }
+
   public function serviceListReferences() {
     throw new StorageException();
   }
-  public function serviceInstanceCopy(Storage $storage, StorageContainerInterface $source_container) {}
-}
 
+  public function serviceInstanceCopy(Storage $storage, StorageContainerInterface $source_container) {
+    
+  }
+
+}
 
 interface StorageContainerInterface {
 
   public function __construct(array $fields);
+
   public function service();
+
   public function count();
+
   public function size($format = FALSE);
+
   public function status();
+
   public function create($already_exists = FALSE);
+
   public function name();
+
   public function path();
+
   public function link();
+
   public function update();
+
   public function flushServingContainer();
+
   public function instanceCreate(Storage $storage, $uri);
+
   public function instanceCopy(Storage $storage, StorageContainerInterface $source_container);
+
   public function tryInstanceCopy(Storage $storage);
+
   public function ensureInstanceExists(Storage $storage);
+
   public function instanceExists(Storage $storage);
+
   public function instanceDestroyIfUnrequired(Storage $storage, $reference);
+
   public function instanceDestroy(Storage $storage, $reference);
+
   public function instanceLink($reference);
+
   public function classes();
+
   public function delete();
+
   public function destroy();
+
   public function referenceExists($reference);
+
   public function uniqueFilename($filename);
+
   public function logInfo();
+
   public function serviceSettingsForm($already_exists);
+
   public function serviceSettingsValidate($already_exists);
+
   public function serviceCreate();
+
   public function servicePostCreate();
+
   public function serviceInfo();
+
   public function serviceUpdate();
+
   public function serviceDestroy();
+
   public function serviceMaintenance();
+
   public function serviceListReferences();
+
   public function serviceManifest(array &$sandbox, &$finished);
+
   public function serviceInstanceCreate(Storage $storage, $uri);
+
   public function serviceInstanceCopy(Storage $storage, StorageContainerInterface $source_container);
+
   public function serviceInstanceExists($reference);
+
   public function serviceInstanceDestroy($reference);
+
   public function serviceInstanceGetContents($reference);
+
   public function serviceInstanceGetUri($reference);
+
   public function serviceInstanceCheck($reference);
+
   public function serviceInstanceServe($reference, $https);
+
   public function serviceInstanceOutput($reference);
 }
